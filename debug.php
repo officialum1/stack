@@ -1,79 +1,45 @@
 <?php
 header('Content-Type: text/plain');
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
-echo "=== STACKPOSTS DIAGNOSTICS ===\n\n";
+echo "=== STACKPOSTS BOOTSTRAP DEBBUGGER ===\n\n";
 
-echo "PHP Version: " . phpversion() . "\n";
-echo "Operating System: " . PHP_OS . "\n\n";
-
-$extensions = ['pdo_mysql', 'mbstring', 'openssl', 'curl', 'gd', 'zip', 'xml', 'fileinfo'];
-echo "=== Required Extensions ===\n";
-foreach ($extensions as $ext) {
-    echo "$ext: " . (extension_loaded($ext) ? "ENABLED" : "DISABLED (WARNING)") . "\n";
-}
-echo "\n";
-
-echo "=== Files & Permissions ===\n";
-echo ".env exists: " . (file_exists(__DIR__ . '/.env') ? "YES" : "NO (CRITICAL)") . "\n";
-if (file_exists(__DIR__ . '/.env')) {
-    echo ".env size: " . filesize(__DIR__ . '/.env') . " bytes\n";
-}
-echo "storage/ is writable: " . (is_writable(__DIR__ . '/storage') ? "YES" : "NO (WARNING)") . "\n";
-echo "bootstrap/cache/ is writable: " . (is_writable(__DIR__ . '/bootstrap/cache') ? "YES" : "NO (WARNING)") . "\n\n";
-
-echo "=== Database Connection ===\n";
-if (file_exists(__DIR__ . '/.env')) {
-    // Parse .env manually line by line to avoid standard parse_ini_file issues with unquoted hashes
-    $env = [];
-    $lines = file(__DIR__ . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        if (strpos(trim($line), '#') === 0) continue;
-        list($name, $value) = array_pad(explode('=', $line, 2), 2, null);
-        if ($name !== null) {
-            $env[trim($name)] = trim($value, " \t\n\r\0\x0B\"'");
-        }
+// Register shutdown function to catch fatal errors
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        echo "\n!!! FATAL ERROR DETECTED !!!\n";
+        echo "Type: " . $error['type'] . "\n";
+        echo "Message: " . $error['message'] . "\n";
+        echo "File: " . $error['file'] . "\n";
+        echo "Line: " . $error['line'] . "\n";
     }
-    
-    $host = isset($env['DB_HOST']) ? $env['DB_HOST'] : '';
-    $db = isset($env['DB_DATABASE']) ? $env['DB_DATABASE'] : '';
-    $user = isset($env['DB_USERNAME']) ? $env['DB_USERNAME'] : '';
-    $pass = isset($env['DB_PASSWORD']) ? $env['DB_PASSWORD'] : '';
-    
-    echo "Configured Database Host: $host\n";
-    echo "Configured Database Name: $db\n";
-    echo "Configured Database User: $user\n";
-    
-    try {
-        $dsn = "mysql:host=$host;dbname=$db;charset=utf8mb4";
-        $options = [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5];
-        $pdo = new PDO($dsn, $user, $pass, $options);
-        echo "Database Connection Status: SUCCESSFUL!\n";
-    } catch (Exception $e) {
-        echo "Database Connection Status: FAILED! Error: " . $e->getMessage() . "\n";
-    }
-} else {
-    echo "Skipping DB check (no .env found)\n";
-}
-echo "\n";
+});
 
-echo "=== Laravel Logs (Last 20 lines) ===\n";
-$logPath = __DIR__ . '/storage/logs/laravel.log';
-if (file_exists($logPath)) {
-    $lines = file($logPath);
-    $last_lines = array_slice($lines, -20);
-    echo implode("", $last_lines);
-} else {
-    echo "No laravel.log file found yet.\n";
-}
-echo "\n";
+try {
+    echo "1. Requiring vendor/autoload.php...\n";
+    require_once __DIR__ . '/vendor/autoload.php';
+    echo "Autoload loaded successfully.\n\n";
 
-echo "=== Apache/LiteSpeed Server error_log ===\n";
-$serverLogPath = __DIR__ . '/error_log';
-if (file_exists($serverLogPath)) {
-    $lines = file($serverLogPath);
-    $last_lines = array_slice($lines, -30);
-    echo implode("", $last_lines);
-} else {
-    echo "No server error_log file found in root.\n";
-}
+    echo "2. Bootstrapping application...\n";
+    $app = require_once __DIR__ . '/bootstrap/app.php';
+    echo "Application bootstrapped successfully.\n\n";
 
+    echo "3. Capturing Request...\n";
+    $request = Illuminate\Http\Request::capture();
+    echo "Request captured successfully.\n\n";
+
+    echo "4. Handling Request...\n";
+    $kernel = $app->make(Illuminate\Contracts\Http\Kernel::class);
+    $response = $kernel->handle($request);
+    echo "Request handled successfully!\n";
+    echo "Response status: " . $response->getStatusCode() . "\n";
+} catch (Throwable $e) {
+    echo "\n!!! EXCEPTION CAUGHT !!!\n";
+    echo "Message: " . $e->getMessage() . "\n";
+    echo "File: " . $e->getFile() . "\n";
+    echo "Line: " . $e->getLine() . "\n";
+    echo "Trace:\n" . $e->getTraceAsString() . "\n";
+}
