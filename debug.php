@@ -65,3 +65,15 @@ if (file_exists($logPath)) {
 } else {
     echo "No laravel.log file found yet.\n";
 }
+echo "\n";
+
+echo "=== Apache/LiteSpeed Server error_log ===\n";
+$serverLogPath = __DIR__ . '/error_log';
+if (file_exists($serverLogPath)) {
+    $lines = file($serverLogPath);
+    $last_lines = array_slice($lines, -30);
+    echo implode("", $last_lines);
+} else {
+    echo "No server error_log file found in root.\n";
+}
+
